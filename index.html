@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FETÖ VUR Poligon: 3D Atış</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: "Segoe UI", Arial, sans-serif;
+  }
+
+  canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ---------- Hedef görselleri ---------- */
+  #target-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .target-img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: none;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+    user-select: none;
+    will-change: transform, width, height;
+  }
+
+  /* ---------- Jumpscare video katmanı ---------- */
+  #video-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    background: #000;
+  }
+
+  #video-overlay video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* ---------- Üst orta gökkuşağı şeridi ---------- */
+  #top-banner {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    max-width: calc(100% - 32px);
+    padding: 10px 32px;
+    border-radius: 8px;
+    border-bottom: 3px solid #ff3b3b;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  #top-banner .rainbow {
+    display: inline-block;
+    font-size: clamp(14px, 3vw, 26px);
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #fff;
+    background-image: linear-gradient(
+      90deg,
+      #ff3b3b, #ffaa00, #ffea00, #00ff88,
+      #0099ff, #b600ff, #ff3b3b
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rainbowFlow 4s linear infinite;
+  }
+
+  @keyframes rainbowFlow {
+    from { background-position: 0% 50%; }
+    to   { background-position: 200% 50%; }
+  }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 10;
+    padding: 10px 18px;
+    border-left: 4px solid #ff3b3b;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.6;
+    text-shadow: 0 1px 3px #000;
+    pointer-events: none;
+  }
+
+  #hud span.val { color: #ffd54a; }
+  #timer.low    { color: #ff4d4d; }
+  #lives        { letter-spacing: 4px; }
+
+  /* ---------- Nişangah ---------- */
+  #crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #crosshair::before,
+  #crosshair::after {
+    content: "";
+    position: absolute;
+    background: #00ff88;
+    box-shadow: 0 0 3px #000;
+  }
+
+  #crosshair::before {
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    transform: translateX(-50%);
+  }
+
+  #crosshair::after {
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+
+  #crosshair .dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #ff3b3b;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+
+  #crosshair.hit::before,
+  #crosshair.hit::after {
+    background: #ffd54a;
+  }
+
+  /* ---------- Hasar efekti ---------- */
+  #damage {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    opacity: 0;
+    transition: opacity 0.35s;
+    pointer-events: none;
+    background: radial-gradient(
+      circle,
+      rgba(255, 0, 0, 0) 40%,
+      rgba(255, 0, 0, 0.65) 100%
+    );
+  }
+
+  #damage.flash {
+    opacity: 1;
+    transition: none;
+  }
+
+  /* ---------- Menü katmanı ---------- */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    text-align: center;
+  }
+
+  #overlay h1 {
+    font-size: 52px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 20px rgba(255, 59, 59, 0.7);
+  }
+
+  #overlay p {
+    max-width: 560px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: #ddd;
+  }
+
+  #overlay .keys {
+    font-size: 15px;
+    color: #aaa;
+  }
+
+  .btn {
+    padding: 14px 36px;
+    border: none;
+    border-radius: 10px;
+    background: #ff3b3b;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+  }
+
+  .btn:hover {
+    background: #ff5c5c;
+    transform: scale(1.05);
+  }
+</style>
+</head>
+<body>
+
+<div id="target-layer"></div>
+
+<div id="video-overlay">
+  <video id="jumpscare-video" src="jumpscare.mp4"
+         preload="auto" playsinline></video>
+</div>
+
+<div id="top-banner">
+  <span class="rainbow">KutukSokan31</span>
+</div>
+
+<div id="hud">
+  Skor: <span class="val" id="score">0</span><br>
+  Can: <span id="lives"></span><br>
+  Kalan Süre: <span class="val" id="timer">90</span>s
+</div>
+
+<div id="crosshair"><div class="dot"></div></div>
+<div id="damage"></div>
+
+<div id="overlay">
+  <h1 id="ovTitle">FETÖ VUR Poligon: 3D Atış</h1>
+  <p id="ovMsg">
+    Puan hedeflerine ateş et: <b>+10 puan</b>.<br>
+    Tuzak hedeflere ateş edersen <b>1 can</b> kaybedersin.<br>
+    Toplam 3 canın var düzgün oyna sikmiyim. Hedefler kısa süre sonra kaybolur.
+  </p>
+  <p class="keys">
+    WASD: Hareket &nbsp;|&nbsp; Fare: Etrafa bak &nbsp;|&nbsp;
+    Sol Tık: Ateş &nbsp;|&nbsp; ESC: Duraklat
+  </p>
+  <button class="btn" id="startBtn">SİKİŞE BAŞLA!</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ====== KULLANICI AYARLARI (dosyalar index.html ile aynı klasörde) ======
+// Görsel bulunamazsa otomatik olarak yedek hedef çizimi kullanılır.
+const GORSEL_1_PUAN  = "ayak.jpg";         // Puan kazandıran hedef
+const GORSEL_2_TUZAK = "ayak2.jpg";        // Can azaltan tuzak hedef
+const SES_ISABET_URL = "seyeverin.mp3";    // Puan hedefi vurulunca çalar
+
+(function () {
+  // ====== SABİTLER ======
+  const GAME_TIME = 90;
+  const JUMPSCARE_AT = 7;        // kalan süre bu değere inince jumpscare
+  const MAX_LIVES = 3;
+  const TARGET_COUNT = 3;
+  const TRAP_CHANCE = 0.4;       // %60 puan, %40 tuzak
+  const RESPAWN_DELAY = 0.5;     // kayboldktan sonra yeniden doğma (sn)
+  const LIFE_MIN = 1.0;          // hedefin ekranda kalma süresi (min sn)
+  const LIFE_MAX = 2.0;          // hedefin ekranda kalma süresi (max sn)
+  const SHRINK_TIME = 0.4;       // kaybolurken küçülme süresi (sn)
+  const ROOM = { w: 30, h: 8, d: 44 };
+  const PLAYER_HEIGHT = 1.7;
+  const MOVE_SPEED = 8;
+
+  // ====== OYUN DURUMU ======
+  // ready | playing | paused | jumpscare | over
+  let state = "ready";
+  let score = 0;
+  let lives = MAX_LIVES;
+  let timeLeft = GAME_TIME;
+  let gameClock = 0;
+  let yaw = 0;
+  let pitch = 0;
+  let jumpscareDone = false;
+
+  // ====== SAHNE ======
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d14);
+  scene.fog = new THREE.Fog(0x0b0d14, 25, 60);
+
+  const aspect = window.innerWidth / window.innerHeight;
+  const camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
+  const startPos = { x: 0, y: PLAYER_HEIGHT, z: ROOM.d / 2 - 4 };
+  camera.rotation.order = "YXZ";
+  camera.position.set(startPos.x, startPos.y, startPos.z);
+  scene.add(camera);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+
+  // ====== IŞIKLAR ======
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+  for (let i = 0; i < 4; i++) {
+    const light = new THREE.PointLight(0xfff2dd, 0.7, 40);
+    const lightZ = -ROOM.d / 2 + 6 + i * 11;
+    light.position.set(0, ROOM.h - 0.5, lightZ);
+    scene.add(light);
+  }
+
+  // ====== PROSEDÜREL DOKULAR ======
+  function makeCanvasTexture(size, drawFn, repeatX, repeatY) {
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    drawFn(c.getContext("2d"), size);
+
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeatX, repeatY);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = 8;
+    return t;
+  }
+
+  function drawFloor(g, s) {
+    g.fillStyle = "#2a2d38";
+    g.fillRect(0, 0, s, s);
+    g.strokeStyle = "#3d4150";
+    g.lineWidth = 4;
+    g.strokeRect(0, 0, s, s);
+    g.fillStyle = "rgba(255,255,255,0.03)";
+    g.fillRect(8, 8, s / 2 - 8, s / 2 - 8);
+  }
+
+  function drawWall(g, s) {
+    g.fillStyle = "#3a3f52";
+    g.fillRect(0, 0, s, s);
+    g.fillStyle = "#454b60";
+    g.fillRect(6, 6, s - 12, s - 12);
+    g.strokeStyle = "#2a2e3d";
+    g.lineWidth = 4;
+    g.strokeRect(0, 0, s, s);
+  }
+
+  function drawCeiling(g, s) {
+    g.fillStyle = "#23262f";
+    g.fillRect(0, 0, s, s);
+    g.strokeStyle = "#31353f";
+    g.lineWidth = 6;
+    g.strokeRect(0, 0, s, s);
+  }
+
+  const floorTex  = makeCanvasTexture(256, drawFloor, ROOM.w / 3, ROOM.d / 3);
+  const wallTexFB = makeCanvasTexture(256, drawWall, 8, 3);
+  const wallTexLR = makeCanvasTexture(256, drawWall, 12, 3);
+  const ceilTex   = makeCanvasTexture(256, drawCeiling, ROOM.w / 4, ROOM.d / 4);
+
+  // ====== ODA ======
+  function addPlane(w, h, mat, pos, rot) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    m.position.set(pos[0], pos[1], pos[2]);
+    m.rotation.set(rot[0], rot[1], rot[2]);
+    scene.add(m);
+    return m;
+  }
+
+  function makeMat(texture, rough) {
+    return new THREE.MeshStandardMaterial({ map: texture, roughness: rough });
+  }
+
+  const floorMat  = makeMat(floorTex, 0.85);
+  const ceilMat   = makeMat(ceilTex, 1);
+  const wallMatFB = makeMat(wallTexFB, 0.9);
+  const wallMatLR = makeMat(wallTexLR, 0.9);
+
+  // Kısa koordinat değişkenleri
+  const PI = Math.PI;
+  const halfW = ROOM.w / 2;
+  const halfD = ROOM.d / 2;
+  const halfH = ROOM.h / 2;
+
+  // Zemin
+  const floorPos = [0, 0, 0];
+  const floorRot = [-PI / 2, 0, 0];
+
+  // Tavan
+  const ceilPos = [0, ROOM.h, 0];
+  const ceilRot = [PI / 2, 0, 0];
+
+  // Arka ve ön duvar
+  const backPos  = [0, halfH, -halfD];
+  const backRot  = [0, 0, 0];
+  const frontPos = [0, halfH, halfD];
+  const frontRot = [0, PI, 0];
+
+  // Sol ve sağ duvar
+  const leftPos  = [-halfW, halfH, 0];
+  const leftRot  = [0, PI / 2, 0];
+  const rightPos = [halfW, halfH, 0];
+  const rightRot = [0, -PI / 2, 0];
+
+  addPlane(ROOM.w, ROOM.d, floorMat, floorPos, floorRot);
+  addPlane(ROOM.w, ROOM.d, ceilMat, ceilPos, ceilRot);
+  addPlane(ROOM.w, ROOM.h, wallMatFB, backPos, backRot);
+  addPlane(ROOM.w, ROOM.h, wallMatFB, frontPos, frontRot);
+  addPlane(ROOM.d, ROOM.h, wallMatLR, leftPos, leftRot);
+  addPlane(ROOM.d, ROOM.h, wallMatLR, rightPos, rightRot);
+
+  // ====== DERİNLİK ÖĞELERİ (çizgi, sütun, panel) ======
+  const lineMat   = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
+  const stripeMat = new THREE.MeshBasicMaterial({ color: 0xff3b3b });
+  const panelMat  = new THREE.MeshBasicMaterial({ color: 0xfff6e0 });
+  const pillarMat = new THREE.MeshStandardMaterial({
+    color: 0x1d2029,
+    roughness: 0.7
+  });
+
+  const lineGeo   = new THREE.PlaneGeometry(ROOM.w - 0.5, 0.12);
+  const pillarGeo = new THREE.BoxGeometry(1, ROOM.h, 1);
+  const stripeGeo = new THREE.BoxGeometry(1.02, 0.15, 1.02);
+  const panelGeo  = new THREE.PlaneGeometry(6, 1.2);
+
+  function addFloorLine(z) {
+    const line = new THREE.Mesh(lineGeo, lineMat);
+    line.rotation.x = -PI / 2;
+    line.position.set(0, 0.01, z);
+    scene.add(line);
+  }
+
+  function addPillar(side, z) {
+    const px = side * (halfW - 0.5);
+
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.set(px, halfH, z);
+    scene.add(pillar);
+
+    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+    stripe.position.set(px, 2.5, z);
+    scene.add(stripe);
+  }
+
+  function addCeilingPanel(z) {
+    const panel = new THREE.Mesh(panelGeo, panelMat);
+    panel.rotation.x = PI / 2;
+    panel.position.set(0, ROOM.h - 0.02, z);
+    scene.add(panel);
+  }
+
+  for (let z = -16; z <= 16; z += 8) {
+    addFloorLine(z);
+    addPillar(-1, z);
+    addPillar(1, z);
+    addCeilingPanel(z);
+  }
+
+  // ====== SİLAH ======
+  const gun = new THREE.Group();
+
+  const gunBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.12, 0.5),
+    new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      metalness: 0.6,
+      roughness: 0.4
+    })
+  );
+
+  const gunBarrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.35, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x555555,
+      metalness: 0.8,
+      roughness: 0.3
+    })
+  );
+
+  gunBarrel.rotation.x = PI / 2;
+  gunBarrel.position.set(0, 0.03, -0.35);
+  gun.add(gunBody);
+  gun.add(gunBarrel);
+  gun.position.set(0.28, -0.26, -0.55);
+  camera.add(gun);
+
+  const gunBasePos = gun.position.clone();
+  let recoil = 0;
+
+  // ====== HEDEF GÖRSELLERİ ======
+  // Görseller WebGL dokusu yerine ekran katmanında <img> olarak çizilir.
+  // Böylece index.html çift tıklanıp açılsa (file://) bile görseller çalışır.
+  function drawBullseye(g) {
+    const rings = ["#d81f1f", "#ffffff", "#d81f1f", "#ffffff", "#d81f1f"];
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, 256, 256);
+
+    rings.forEach(function (color, i) {
+      g.beginPath();
+      g.arc(128, 128, 120 - i * 24, 0, PI * 2);
+      g.fillStyle = color;
+      g.fill();
+    });
+
+    g.beginPath();
+    g.arc(128, 128, 10, 0, PI * 2);
+    g.fillStyle = "#000";
+    g.fill();
+  }
+
+  function drawTrapSign(g) {
+    g.fillStyle = "#111";
+    g.fillRect(0, 0, 256, 256);
+
+    g.fillStyle = "#ffd400";
+    for (let i = -256; i < 256; i += 48) {
+      g.beginPath();
+      g.moveTo(i, 0);
+      g.lineTo(i + 24, 0);
+      g.lineTo(i + 24 + 256, 256);
+      g.lineTo(i + 256, 256);
+      g.closePath();
+      g.fill();
+    }
+
+    g.fillStyle = "#111";
+    g.beginPath();
+    g.arc(128, 128, 78, 0, PI * 2);
+    g.fill();
+
+    g.fillStyle = "#ff2b2b";
+    g.font = "bold 120px Arial";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText("X", 128, 136);
+  }
+
+  function makeFallbackUrl(isTrap) {
+    const c = document.createElement("canvas");
+    c.width = 256;
+    c.height = 256;
+    const g = c.getContext("2d");
+
+    if (isTrap) drawTrapSign(g);
+    else drawBullseye(g);
+
+    g.strokeStyle = "#222";
+    g.lineWidth = 6;
+    g.strokeRect(0, 0, 256, 256);
+    return c.toDataURL("image/png");
+  }
+
+  const imageUrls = { puan: GORSEL_1_PUAN, tuzak: GORSEL_2_TUZAK };
+  const fallbackUrls = {
+    puan:  makeFallbackUrl(false),
+    tuzak: makeFallbackUrl(true)
+  };
+
+  const targetLayer = document.getElementById("target-layer");
+  const targetGeo = new THREE.BoxGeometry(2, 2, 0.2);
+  const targets = [];
+
+  // Hedefin türüne göre doğru görseli takar (yüklenemezse yedek çizim)
+  function applyTargetImage(t) {
+    const key = t.userData.isTrap ? "tuzak" : "puan";
+    const img = t.userData.img;
+    if (img.dataset.key === key) return;
+
+    img.dataset.key = key;
+    img.onerror = function () {
+      img.onerror = null;
+      img.src = fallbackUrls[key];
+    };
+    img.src = imageUrls[key];
+  }
+
+  // 3D hedef konumunu ekrana projekte edip görseli oraya yerleştirir
+  const camLocal = new THREE.Vector3();
+  const ndc = new THREE.Vector3();
+
+  function updateTargetSprites() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const k = h / (2 * Math.tan(halfFov));
+    camera.updateMatrixWorld();
+
+    targets.forEach(function (t) {
+      const img = t.userData.img;
+      camLocal.copy(t.position).applyMatrix4(camera.matrixWorldInverse);
+      const depth = -camLocal.z;
+
+      if (!t.visible || depth < 0.3) {
+        img.style.display = "none";
+        return;
+      }
+
+      ndc.copy(t.position).project(camera);
+      const cx = (ndc.x * 0.5 + 0.5) * w;
+      const cy = (-ndc.y * 0.5 + 0.5) * h;
+      const size = (2 * t.scale.x) * k / depth;
+      const left = cx - size / 2;
+      const top = cy - size / 2;
+
+      img.style.display = "block";
+      img.style.width = size + "px";
+      img.style.height = size + "px";
+      img.style.transform = "translate(" + left + "px," + top + "px)";
+    });
+  }
+
+  // ====== HEDEFLER ======
+  function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  // Hedefi rastgele bir yere koyar; %60 puan / %40 tuzak; ömür atar
+  function placeTarget(t) {
+    const size = randomBetween(0.8, 1.6);
+    const x = randomBetween(-13, 13);
+    const y = randomBetween(1.2, 6.5);
+    const z = randomBetween(-18, 6);
+
+    t.userData.isTrap = Math.random() < TRAP_CHANCE;
+    t.userData.baseSize = size;
+    t.userData.shrinking = false;
+    t.userData.respawnAt = null;
+    t.userData.expireAt = gameClock + randomBetween(LIFE_MIN, LIFE_MAX);
+
+    applyTargetImage(t);
+    t.scale.set(size, size, 1);
+    t.position.set(x, y, z);
+    t.rotation.y = (Math.random() - 0.5) * 0.8;
+    t.visible = true;
+  }
+
+  function hideTarget(t) {
+    t.visible = false;
+    t.userData.shrinking = false;
+    t.userData.expireAt = null;
+    t.userData.respawnAt = gameClock + RESPAWN_DELAY;
+  }
+
+  function startShrink(t) {
+    t.userData.shrinking = true;
+    t.userData.shrinkStart = gameClock;
+  }
+
+  function updateShrink(t) {
+    const elapsed = gameClock - t.userData.shrinkStart;
+    const progress = Math.min(1, elapsed / SHRINK_TIME);
+    const s = Math.max(0.001, t.userData.baseSize * (1 - progress));
+    t.scale.set(s, s, 1);
+    if (progress >= 1) hideTarget(t);
+  }
+
+  function createTarget() {
+    const img = document.createElement("img");
+    img.className = "target-img";
+    img.alt = "";
+    img.draggable = false;
+    targetLayer.appendChild(img);
+
+    // Görünmez kutu: sadece ateş isabet testi (raycast) için
+    const mat = new THREE.MeshBasicMaterial({ visible: false });
+    const t = new THREE.Mesh(targetGeo, mat);
+    t.userData = { isTrap: false, respawnAt: null, expireAt: null, img: img };
+    placeTarget(t);
+    scene.add(t);
+    targets.push(t);
+    return t;
+  }
+
+  // Süresi dolanı küçült, kaybolanı başka yerde yeniden doğur
+  function updateTargets() {
+    targets.forEach(function (t) {
+      const d = t.userData;
+
+      if (t.visible && d.shrinking) {
+        updateShrink(t);
+      } else if (t.visible) {
+        if (gameClock >= d.expireAt) startShrink(t);
+      } else if (gameClock >= d.respawnAt) {
+        placeTarget(t);
+      }
+    });
+  }
+
+  for (let i = 0; i < TARGET_COUNT; i++) createTarget();
+
+  // ====== SES ======
+  const hitAudio = new Audio();
+  hitAudio.preload = "auto";
+  hitAudio.src = SES_ISABET_URL;
+
+  let audioCtx = null;
+
+  function beep(freq, dur, type, vol) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = audioCtx || new AC();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(now + dur);
+    } catch (err) {
+      // ses desteklenmiyorsa sessizce geç
+    }
+  }
+
+  // Her isabette sesi sıfırdan çal (üst üste binebilir)
+  function playHitSound() {
+    try {
+      const a = hitAudio.cloneNode(true);
+      a.currentTime = 0;
+      const p = a.play();
+      if (p && p.catch) {
+        p.catch(function () { beep(880, 0.15, "square", 0.12); });
+      }
+    } catch (err) {
+      beep(880, 0.15, "square", 0.12);
+    }
+  }
+
+  // ====== UI ELEMANLARI ======
+  const scoreEl = document.getElementById("score");
+  const timerEl = document.getElementById("timer");
+  const livesEl = document.getElementById("lives");
+  const overlay = document.getElementById("overlay");
+  const ovTitle = document.getElementById("ovTitle");
+  const ovMsg = document.getElementById("ovMsg");
+  const startBtn = document.getElementById("startBtn");
+  const crosshair = document.getElementById("crosshair");
+  const damageEl = document.getElementById("damage");
+  const videoOverlay = document.getElementById("video-overlay");
+  const jumpscareVideo = document.getElementById("jumpscare-video");
+
+  function renderLives() {
+    let html = "";
+    for (let i = 0; i < MAX_LIVES; i++) {
+      html += i < lives ? "❤️" : "🖤";
+    }
+    livesEl.innerHTML = html;
+  }
+
+  function showOverlay(title, msgHtml, btnText) {
+    ovTitle.textContent = title;
+    ovMsg.innerHTML = msgHtml;
+    startBtn.textContent = btnText;
+    overlay.style.display = "flex";
+  }
+
+  function releasePointer() {
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  // ====== OYUN SIFIRLAMA ======
+  function resetGame() {
+    score = 0;
+    lives = MAX_LIVES;
+    timeLeft = GAME_TIME;
+    gameClock = 0;
+    jumpscareDone = false;
+    yaw = 0;
+    pitch = 0;
+
+    scoreEl.textContent = "0";
+    timerEl.textContent = String(GAME_TIME);
+    timerEl.classList.remove("low");
+    renderLives();
+
+    targets.forEach(placeTarget);
+    camera.position.set(startPos.x, startPos.y, startPos.z);
+    camera.rotation.set(0, 0, 0);
+  }
+
+  function endByLives() {
+    state = "over";
+    releasePointer();
+    resetGame();
+    showOverlay(
+      "OYUN BİTTİ",
+      "Canların tükendi! Oyun sıfırlandı.",
+      "Yeniden Başla"
+    );
+  }
+
+  // ====== TAM EKRAN YARDIMCILARI ======
+  function enterFullscreen(el) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) return;
+    try {
+      const p = req.call(el);
+      if (p && p.catch) p.catch(function () {});
+    } catch (err) {
+      // tarayıcı izin vermezse oyun yine de devam eder
+    }
+  }
+
+  function leaveFullscreen() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) return;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    try {
+      const p = exit.call(document);
+      if (p && p.catch) p.catch(function () {});
+    } catch (err) {
+      // yoksay
+    }
+  }
+
+  // ====== 7. SANİYE JUMPSCARE ======
+  function triggerJumpscare() {
+    jumpscareDone = true;
+    state = "jumpscare";
+    releasePointer();
+
+    videoOverlay.style.display = "block";
+    if (!isFullscreen()) enterFullscreen(videoOverlay);
+
+    jumpscareVideo.currentTime = 0;
+    jumpscareVideo.muted = false;
+    jumpscareVideo.volume = 1;
+
+    const p = jumpscareVideo.play();
+    if (p && p.catch) p.catch(finishJumpscare);
+  }
+
+  function finishJumpscare() {
+    if (state !== "jumpscare") return;
+
+    const finalScore = score;
+    state = "over";
+    jumpscareVideo.pause();
+    videoOverlay.style.display = "none";
+    leaveFullscreen();
+    resetGame();
+
+    showOverlay(
+      "OYUN BİTTİ",
+      "Toplam Skorun: " +
+        "<b style='color:#ffd54a;font-size:34px'>" + finalScore + "</b>",
+      "Yeniden Başla"
+    );
+  }
+
+  jumpscareVideo.onended = finishJumpscare;
+  jumpscareVideo.onerror = finishJumpscare;
+
+  // ====== BAŞLAT / DURAKLAT ======
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function onLockError() {
+    if (state === "playing") return;
+    showOverlay(
+      "BAŞLATILAMADI",
+      "Fare kilidi alınamadı. Butona bir kez daha tıkla.",
+      "Tekrar Dene"
+    );
+  }
+
+  function requestLock() {
+    try {
+      const p = renderer.domElement.requestPointerLock();
+      if (p && p.catch) p.catch(onLockError);
+    } catch (err) {
+      onLockError();
+    }
+  }
+
+  startBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (state === "over") resetGame();
+    requestLock();
+  });
+
+  overlay.addEventListener("click", function () {
+    if (state === "paused") requestLock();
+  });
+
+  document.addEventListener("pointerlockerror", onLockError);
+
+  document.addEventListener("pointerlockchange", function () {
+    const locked = document.pointerLockElement === renderer.domElement;
+
+    if (locked) {
+      state = "playing";
+      overlay.style.display = "none";
+      // Tam ekran burada açılmaz; yalnızca jumpscare anında devreye girer
+    } else if (state === "playing") {
+      state = "paused";
+      showOverlay("DURAKLATILDI", "Devam etmek için tıkla.", "Devam Et");
+    }
+  });
+
+  // ====== KONTROLLER ======
+  const keys = {};
+
+  document.addEventListener("keydown", function (e) {
+    keys[e.code] = true;
+  });
+
+  document.addEventListener("keyup", function (e) {
+    keys[e.code] = false;
+  });
+
+  document.addEventListener("mousemove", function (e) {
+    if (document.pointerLockElement !== renderer.domElement) return;
+
+    const limit = PI / 2 - 0.01;
+    yaw -= e.movementX * 0.0022;
+    pitch -= e.movementY * 0.0022;
+    pitch = Math.max(-limit, Math.min(limit, pitch));
+    camera.rotation.set(pitch, yaw, 0);
+  });
+
+  // ====== PARÇACIKLAR ======
+  const particles = [];
+  const partGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+
+  function spawnBurst(pos, color) {
+    for (let i = 0; i < 14; i++) {
+      const pickColor = Math.random() > 0.5 ? color : 0xffffff;
+      const m = new THREE.Mesh(
+        partGeo,
+        new THREE.MeshBasicMaterial({ color: pickColor, transparent: true })
+      );
+
+      m.position.copy(pos);
+      m.userData.vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.2) * 6,
+        (Math.random() - 0.5) * 6
+      );
+      m.userData.life = 0.6;
+      scene.add(m);
+      particles.push(m);
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.userData.life -= dt;
+      p.userData.vel.y -= 12 * dt;
+      p.position.addScaledVector(p.userData.vel, dt);
+      p.material.opacity = Math.max(0, p.userData.life / 0.6);
+
+      if (p.userData.life <= 0) {
+        scene.remove(p);
+        p.material.dispose();
+        particles.splice(i, 1);
+      }
+    }
+  }
+
+  // ====== ATEŞ (RAYCASTER) ======
+  const raycaster = new THREE.Raycaster();
+  const center = new THREE.Vector2(0, 0);
+
+  function onTrapHit(point) {
+    spawnBurst(point, 0xffd400);
+    lives--;
+    renderLives();
+    beep(110, 0.3, "sawtooth", 0.2);
+
+    damageEl.classList.add("flash");
+    setTimeout(function () {
+      damageEl.classList.remove("flash");
+    }, 80);
+
+    if (lives <= 0) endByLives();
+  }
+
+  function onScoreHit(point) {
+    spawnBurst(point, 0xff3b3b);
+    score += 10;
+    scoreEl.textContent = String(score);
+    playHitSound();
+
+    crosshair.classList.add("hit");
+    setTimeout(function () {
+      crosshair.classList.remove("hit");
+    }, 120);
+  }
+
+  function shoot() {
+    recoil = 1;
+    beep(180, 0.12, "sawtooth", 0.15);
+
+    raycaster.setFromCamera(center, camera);
+    const visible = targets.filter(function (t) { return t.visible; });
+    const hits = raycaster.intersectObjects(visible, false);
+    if (hits.length === 0) return;
+
+    const target = hits[0].object;
+    const wasTrap = target.userData.isTrap;
+    const point = hits[0].point;
+    hideTarget(target);
+
+    if (wasTrap) onTrapHit(point);
+    else onScoreHit(point);
+  }
+
+  document.addEventListener("mousedown", function (e) {
+    const locked = document.pointerLockElement === renderer.domElement;
+    if (e.button === 0 && state === "playing" && locked) shoot();
+  });
+
+  // ====== ANA DÖNGÜ ======
+  const clock = new THREE.Clock();
+  const fwd = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const move = new THREE.Vector3();
+
+  function updateTimer(dt) {
+    gameClock += dt;
+    timeLeft -= dt;
+
+    // Kalan süre 7 saniyeye (veya altına) düştüğü an jumpscare
+    if (timeLeft <= JUMPSCARE_AT && !jumpscareDone) {
+      timerEl.textContent = String(JUMPSCARE_AT);
+      triggerJumpscare();
+      return;
+    }
+
+    timerEl.textContent = String(Math.ceil(timeLeft));
+    timerEl.classList.toggle("low", timeLeft <= 10);
+  }
+
+  function movePlayer(dt) {
+    fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+    move.set(0, 0, 0);
+
+    if (keys["KeyW"] || keys["ArrowUp"])    move.add(fwd);
+    if (keys["KeyS"] || keys["ArrowDown"])  move.sub(fwd);
+    if (keys["KeyD"] || keys["ArrowRight"]) move.add(right);
+    if (keys["KeyA"] || keys["ArrowLeft"])  move.sub(right);
+
+    if (move.lengthSq() > 0) {
+      move.normalize().multiplyScalar(MOVE_SPEED * dt);
+      camera.position.add(move);
+    }
+
+    const maxX = halfW - 1.2;
+    const maxZ = halfD - 1.2;
+    camera.position.x = Math.max(-maxX, Math.min(maxX, camera.position.x));
+    camera.position.z = Math.max(-maxZ, Math.min(maxZ, camera.position.z));
+    camera.position.y = PLAYER_HEIGHT;
+  }
+
+  function updateGun(dt) {
+    recoil = Math.max(0, recoil - dt * 8);
+    gun.position.set(
+      gunBasePos.x,
+      gunBasePos.y + recoil * 0.02,
+      gunBasePos.z + recoil * 0.08
+    );
+    gun.rotation.x = recoil * 0.12;
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    if (state === "playing") {
+      updateTimer(dt);
+
+      if (state === "playing") {
+        movePlayer(dt);
+        updateTargets();
+      }
+    }
+
+    updateGun(dt);
+    updateParticles(dt);
+    updateTargetSprites();
+    renderer.render(scene, camera);
+  }
+
+  renderLives();
+  animate();
+
+  window.addEventListener("resize", function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+	  window.addEventListener("beforeunload", function (e) {
+    if (gameActive || timeLeft <= 7) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
+  document.addEventListener("fullscreenchange", function () {
+    if (timeLeft <= 7 && !document.fullscreenElement && timeLeft > 0) {
+      document.documentElement.requestFullscreen().catch(err => console.log(err));
+      document.body.requestPointerLock();
+    }
+  });
+
+  });
+})();
+</script>
+</body>
+</html>
